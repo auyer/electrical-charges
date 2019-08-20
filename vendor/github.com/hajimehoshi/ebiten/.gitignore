@@ -1,0 +1,6 @@
+.DS_Store
+*~
+*.aar
+*.apk
+docs/examples/*.js
+docs/examples/*.js.map
