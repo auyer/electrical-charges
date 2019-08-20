@@ -8,7 +8,9 @@ github.com/gopherjs/gopherjs/js
 github.com/gopherjs/webgl
 # github.com/hajimehoshi/ebiten v1.7.0
 github.com/hajimehoshi/ebiten
+github.com/hajimehoshi/ebiten/ebitenutil
 github.com/hajimehoshi/ebiten/examples/resources/images
+github.com/hajimehoshi/ebiten/inpututil
 github.com/hajimehoshi/ebiten/internal/affine
 github.com/hajimehoshi/ebiten/internal/clock
 github.com/hajimehoshi/ebiten/internal/devicescale
@@ -21,6 +23,7 @@ github.com/hajimehoshi/ebiten/internal/png
 github.com/hajimehoshi/ebiten/internal/shareable
 github.com/hajimehoshi/ebiten/internal/ui
 github.com/hajimehoshi/ebiten/internal/web
+github.com/hajimehoshi/ebiten/ebitenutil/internal/assets
 github.com/hajimehoshi/ebiten/internal/jni
 github.com/hajimehoshi/ebiten/internal/math
 github.com/hajimehoshi/ebiten/internal/packing
