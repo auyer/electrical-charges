@@ -208,7 +208,7 @@ func init() {
 	// Initialize the sprites.
 	sprites := []*Sprite{}
 	w, h := ebitenImage.Size()
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 10; i++ {
 		s := &Sprite{
 			image: ebitenImage,
 			x:     rand.Intn(screenWidth - w),
@@ -307,7 +307,7 @@ func (g *Game) update(screen *ebiten.Image) error {
 		}
 	}
 
-	ebitenutil.DebugPrint(screen, "Drag & Drop the sprites!")
+	ebitenutil.DebugPrint(screen, "Drag the shrimp charges !!")
 
 	return nil
 }
