@@ -283,7 +283,7 @@ func (g *Game) update(screen *ebiten.Image) error {
 		}
 	}
 
-	if ebiten.IsRunningSlowly() {
+	if ebiten.IsDrawingSkipped() {
 		return nil
 	}
 
@@ -307,7 +307,7 @@ func (g *Game) update(screen *ebiten.Image) error {
 		}
 	}
 
-	ebitenutil.DebugPrint(screen, "Drag the shrimp charges !!")
+	ebitenutil.DebugPrint(screen, "Drag & Drop the sprites!")
 
 	return nil
 }
