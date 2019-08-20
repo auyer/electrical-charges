@@ -17,7 +17,7 @@ package restorable
 import (
 	"image"
 
-	"github.com/hajimehoshi/ebiten/internal/graphics"
+	"github.com/hajimehoshi/ebiten/internal/graphicscommand"
 )
 
 // restoringEnabled indicates if restoring happens or not.
@@ -53,27 +53,25 @@ var theImages = &images{
 // all stale images.
 //
 // ResolveStaleImages is intended to be called at the end of a frame.
-func ResolveStaleImages() error {
-	if err := graphics.FlushCommands(); err != nil {
-		return err
-	}
+func ResolveStaleImages() {
+	graphicscommand.FlushCommands()
 	if !restoringEnabled {
-		return nil
+		return
 	}
-	return theImages.resolveStaleImages()
+	theImages.resolveStaleImages()
 }
 
 // Restore restores the images.
 //
-// Restoring means to make all *graphics.Image objects have their textures and framebuffers.
+// Restoring means to make all *graphicscommand.Image objects have their textures and framebuffers.
 func Restore() error {
-	if err := graphics.ResetGLState(); err != nil {
+	if err := graphicscommand.ResetGraphicsDriverState(); err != nil {
 		return err
 	}
 	return theImages.restore()
 }
 
-func Images() ([]image.Image, error) {
+func Images() []image.Image {
 	var imgs []image.Image
 	for img := range theImages.images {
 		if img.volatile {
@@ -87,14 +85,11 @@ func Images() ([]image.Image, error) {
 		pix := make([]byte, 4*w*h)
 		for j := 0; j < h; j++ {
 			for i := 0; i < w; i++ {
-				c, err := img.At(i, j)
-				if err != nil {
-					return nil, err
-				}
-				pix[4*(i+j*w)] = byte(c.R)
-				pix[4*(i+j*w)+1] = byte(c.G)
-				pix[4*(i+j*w)+2] = byte(c.B)
-				pix[4*(i+j*w)+3] = byte(c.A)
+				r, g, b, a := img.At(i, j)
+				pix[4*(i+j*w)] = r
+				pix[4*(i+j*w)+1] = g
+				pix[4*(i+j*w)+2] = b
+				pix[4*(i+j*w)+3] = a
 			}
 		}
 		imgs = append(imgs, &image.RGBA{
@@ -103,7 +98,7 @@ func Images() ([]image.Image, error) {
 			Rect:   image.Rect(0, 0, w, h),
 		})
 	}
-	return imgs, nil
+	return imgs
 }
 
 // add adds img to the images.
@@ -118,14 +113,11 @@ func (i *images) remove(img *Image) {
 }
 
 // resolveStaleImages resolves stale images.
-func (i *images) resolveStaleImages() error {
+func (i *images) resolveStaleImages() {
 	i.lastTarget = nil
 	for img := range i.images {
-		if err := img.resolveStale(); err != nil {
-			return err
-		}
+		img.resolveStale()
 	}
-	return nil
 }
 
 // makeStaleIfDependingOn makes all the images stale that depend on target.
@@ -139,7 +131,7 @@ func (i *images) makeStaleIfDependingOn(target *Image) {
 
 func (i *images) makeStaleIfDependingOnImpl(target *Image) {
 	if target == nil {
-		panic("not reached")
+		panic("restorable: target must not be nil at makeStaleIfDependingOnImpl")
 	}
 	if i.lastTarget == target {
 		return
@@ -152,10 +144,10 @@ func (i *images) makeStaleIfDependingOnImpl(target *Image) {
 
 // restore restores the images.
 //
-// Restoring means to make all *graphics.Image objects have their textures and framebuffers.
+// Restoring means to make all *graphicscommand.Image objects have their textures and framebuffers.
 func (i *images) restore() error {
 	if !IsRestoringEnabled() {
-		panic("not reached")
+		panic("restorable: restore cannot be called when restoring is disabled")
 	}
 
 	// Dispose image explicitly
@@ -172,7 +164,9 @@ func (i *images) restore() error {
 	}
 	images := map[*Image]struct{}{}
 	for i := range i.images {
-		images[i] = struct{}{}
+		if !i.priority {
+			images[i] = struct{}{}
+		}
 	}
 	edges := map[edge]struct{}{}
 	for t := range images {
@@ -180,7 +174,13 @@ func (i *images) restore() error {
 			edges[edge{source: s, target: t}] = struct{}{}
 		}
 	}
+
 	sorted := []*Image{}
+	for i := range i.images {
+		if i.priority {
+			sorted = append(sorted, i)
+		}
+	}
 	for len(images) > 0 {
 		// current repesents images that have no incoming edges.
 		current := map[*Image]struct{}{}
@@ -206,6 +206,7 @@ func (i *images) restore() error {
 			delete(edges, e)
 		}
 	}
+
 	for _, img := range sorted {
 		if err := img.restore(); err != nil {
 			return err
@@ -214,7 +215,11 @@ func (i *images) restore() error {
 	return nil
 }
 
-// InitializeGLState initializes the GL state.
-func InitializeGLState() error {
-	return graphics.ResetGLState()
+// InitializeGraphicsDriverState initializes the graphics driver state.
+func InitializeGraphicsDriverState() error {
+	return graphicscommand.ResetGraphicsDriverState()
+}
+
+func Error() error {
+	return graphicscommand.Error()
 }

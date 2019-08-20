@@ -1,34 +1,38 @@
-# github.com/go-gl/gl v0.0.0-20190320180904-bf2b1f2f34d7
-github.com/go-gl/gl/v2.1/gl
-# github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1
+# github.com/go-gl/glfw v0.0.0-20181213070059-819e8ce5125f
 github.com/go-gl/glfw/v3.2/glfw
-# github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f
+# github.com/gopherjs/gopherjs v0.0.0-20180825215210-0210a2f0f73c
 github.com/gopherjs/gopherjs/js
-# github.com/gopherjs/webgl v0.0.0-20180508003723-39bd6d41eeb5
-github.com/gopherjs/webgl
-# github.com/hajimehoshi/ebiten v1.7.0
+# github.com/gopherjs/gopherwasm v1.1.0
+github.com/gopherjs/gopherwasm/js
+# github.com/hajimehoshi/ebiten v1.9.3
 github.com/hajimehoshi/ebiten
 github.com/hajimehoshi/ebiten/ebitenutil
 github.com/hajimehoshi/ebiten/examples/resources/images
 github.com/hajimehoshi/ebiten/inpututil
 github.com/hajimehoshi/ebiten/internal/affine
 github.com/hajimehoshi/ebiten/internal/clock
-github.com/hajimehoshi/ebiten/internal/devicescale
 github.com/hajimehoshi/ebiten/internal/graphics
-github.com/hajimehoshi/ebiten/internal/graphicsutil
+github.com/hajimehoshi/ebiten/internal/graphicscommand
+github.com/hajimehoshi/ebiten/internal/graphicsdriver
 github.com/hajimehoshi/ebiten/internal/hooks
 github.com/hajimehoshi/ebiten/internal/input
-github.com/hajimehoshi/ebiten/internal/opengl
 github.com/hajimehoshi/ebiten/internal/png
 github.com/hajimehoshi/ebiten/internal/shareable
 github.com/hajimehoshi/ebiten/internal/ui
 github.com/hajimehoshi/ebiten/internal/web
 github.com/hajimehoshi/ebiten/ebitenutil/internal/assets
-github.com/hajimehoshi/ebiten/internal/jni
-github.com/hajimehoshi/ebiten/internal/math
+github.com/hajimehoshi/ebiten/internal/graphicsdriver/metal
+github.com/hajimehoshi/ebiten/internal/graphicsdriver/metal/mtl
+github.com/hajimehoshi/ebiten/internal/graphicsdriver/opengl
+github.com/hajimehoshi/ebiten/internal/glfw
 github.com/hajimehoshi/ebiten/internal/packing
 github.com/hajimehoshi/ebiten/internal/restorable
-# golang.org/x/exp v0.0.0-20190731235908-ec7cb31e5a56
+github.com/hajimehoshi/ebiten/internal/devicescale
+github.com/hajimehoshi/ebiten/internal/mainthread
+github.com/hajimehoshi/ebiten/internal/graphicsdriver/metal/ca
+github.com/hajimehoshi/ebiten/internal/graphicsdriver/metal/ns
+github.com/hajimehoshi/ebiten/internal/graphicsdriver/opengl/gl
+# golang.org/x/exp v0.0.0-20180710024300-14dda7b62fcd
 golang.org/x/exp/shiny/driver/gldriver
 golang.org/x/exp/shiny/screen
 golang.org/x/exp/shiny/driver/internal/drawer
@@ -37,19 +41,19 @@ golang.org/x/exp/shiny/driver/internal/event
 golang.org/x/exp/shiny/driver/internal/lifecycler
 golang.org/x/exp/shiny/driver/internal/win32
 golang.org/x/exp/shiny/driver/internal/x11key
-# golang.org/x/image v0.0.0-20190802002840-cff245a6509b
+# golang.org/x/image v0.0.0-20190118043309-183bebdce1b2
 golang.org/x/image/math/f64
-# golang.org/x/mobile v0.0.0-20190814143026-e8b3e6111d02
-golang.org/x/mobile/gl
+# golang.org/x/mobile v0.0.0-20190127143845-a42111704963
 golang.org/x/mobile/app
 golang.org/x/mobile/event/lifecycle
 golang.org/x/mobile/event/paint
 golang.org/x/mobile/event/size
 golang.org/x/mobile/event/touch
+golang.org/x/mobile/gl
 golang.org/x/mobile/app/internal/callfn
 golang.org/x/mobile/event/key
 golang.org/x/mobile/event/mouse
 golang.org/x/mobile/geom
 golang.org/x/mobile/internal/mobileinit
-# golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a
+# golang.org/x/sys v0.0.0-20190203050204-7ae0202eb74c
 golang.org/x/sys/windows

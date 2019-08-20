@@ -51,7 +51,7 @@ func init() {
 }
 
 func (r *recorder) delay() int {
-	delay := 100 * r.skips / ebiten.FPS
+	delay := 100 * r.skips / ebiten.MaxTPS()
 	if delay < 2 {
 		return 2
 	}

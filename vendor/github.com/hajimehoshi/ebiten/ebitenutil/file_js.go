@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gopherjs/gopherjs/js"
+	"github.com/gopherjs/gopherwasm/js"
 )
 
 type file struct {
@@ -34,12 +34,12 @@ func (f *file) Close() error {
 
 func OpenFile(path string) (ReadSeekCloser, error) {
 	var err error
-	var content *js.Object
+	var content js.Value
 	ch := make(chan struct{})
-	req := js.Global.Get("XMLHttpRequest").New()
+	req := js.Global().Get("XMLHttpRequest").New()
 	req.Call("open", "GET", path, true)
 	req.Set("responseType", "arraybuffer")
-	req.Call("addEventListener", "load", func() {
+	loadCallback := js.NewCallback(func([]js.Value) {
 		defer close(ch)
 		status := req.Get("status").Int()
 		if 200 <= status && status < 400 {
@@ -48,17 +48,25 @@ func OpenFile(path string) (ReadSeekCloser, error) {
 		}
 		err = errors.New(fmt.Sprintf("http error: %d", status))
 	})
-	req.Call("addEventListener", "error", func() {
+	defer loadCallback.Release()
+	req.Call("addEventListener", "load", loadCallback)
+	errorCallback := js.NewCallback(func([]js.Value) {
 		defer close(ch)
 		err = errors.New(fmt.Sprintf("XMLHttpRequest error: %s", req.Get("statusText").String()))
 	})
+	req.Call("addEventListener", "error", errorCallback)
+	defer errorCallback.Release()
 	req.Call("send")
 	<-ch
 	if err != nil {
 		return nil, err
 	}
 
-	data := js.Global.Get("Uint8Array").New(content).Interface().([]uint8)
+	uint8contentWrapper := js.Global().Get("Uint8Array").New(content)
+	data := make([]byte, uint8contentWrapper.Get("byteLength").Int())
+	arr := js.TypedArrayOf(data)
+	arr.Call("set", uint8contentWrapper)
+	arr.Release()
 	f := &file{bytes.NewReader(data)}
 	return f, nil
 }

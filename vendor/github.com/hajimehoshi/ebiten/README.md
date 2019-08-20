@@ -6,25 +6,30 @@
 
 A dead simple 2D game library in Go
 
-Website: https://hajimehoshi.github.io/ebiten/
+* [Website](https://hajimehoshi.github.io/ebiten/)
+* [Cheat Sheet](https://github.com/hajimehoshi/ebiten/wiki/Cheat-Sheet)
+
+[![Flappy Example](docs/images/examples/flappy.png)](https://hajimehoshi.github.io/ebiten/examples/flappy.html)
 
 ## Platforms
 
-* [Windows](https://github.com/hajimehoshi/ebiten/wiki/Windows)
+* [Windows](https://github.com/hajimehoshi/ebiten/wiki/Windows) (No Cgo!)
 * [macOS](https://github.com/hajimehoshi/ebiten/wiki/macOS)
 * [Linux](https://github.com/hajimehoshi/ebiten/wiki/Linux)
 * [FreeBSD](https://github.com/hajimehoshi/ebiten/wiki/FreeBSD)
 * [Android](https://github.com/hajimehoshi/ebiten/wiki/Android)
 * [iOS](https://github.com/hajimehoshi/ebiten/wiki/iOS)
-* [Web browsers (Chrome, Firefox, Safari and Edge)](https://github.com/hajimehoshi/ebiten/wiki/Web-Browsers) (powered by [GopherJS](http://gopherjs.org/))
+* Web browsers (Chrome, Firefox, Safari and Edge)
+  * [GopherJS](https://github.com/hajimehoshi/ebiten/wiki/GopherJS)
+  * [WebAssembly](https://github.com/hajimehoshi/ebiten/wiki/WebAssembly) (Experimental)
 
 Note: Gamepad and keyboard are not available on Android/iOS.
 
 ## Features
 
-* 2D Graphics (Geometry/Color matrix transformation, Various composition modes, Offscreen rendering, Fullscreen, Text rendering)
+* 2D Graphics (Geometry/Color matrix transformation, Various composition modes, Offscreen rendering, Fullscreen, Text rendering, Automatic batches, Automatic texture atlas)
 * Input (Mouse, Keyboard, Gamepads, Touches)
-* Audio (MP3, Ogg/Vorbis, WAV, PCM, Syncing with game progress)
+* Audio (Ogg/Vorbis, MP3, WAV, PCM)
 
 ## Packages
 

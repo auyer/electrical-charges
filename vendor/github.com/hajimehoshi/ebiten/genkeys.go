@@ -29,16 +29,63 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/hajimehoshi/ebiten/internal"
+	"github.com/go-gl/glfw/v3.2/glfw"
 )
 
 var (
-	nameToCodes       map[string][]string
+	nameToGLFWKeys    map[string]glfw.Key
+	nameToJSKeyCodes  map[string][]string
 	keyCodeToNameEdge map[int]string
 )
 
 func init() {
-	nameToCodes = map[string][]string{
+	nameToGLFWKeys = map[string]glfw.Key{
+		"Unknown":      glfw.KeyUnknown,
+		"Space":        glfw.KeySpace,
+		"Apostrophe":   glfw.KeyApostrophe,
+		"Comma":        glfw.KeyComma,
+		"Minus":        glfw.KeyMinus,
+		"Period":       glfw.KeyPeriod,
+		"Slash":        glfw.KeySlash,
+		"Semicolon":    glfw.KeySemicolon,
+		"Equal":        glfw.KeyEqual,
+		"LeftBracket":  glfw.KeyLeftBracket,
+		"Backslash":    glfw.KeyBackslash,
+		"RightBracket": glfw.KeyRightBracket,
+		"GraveAccent":  glfw.KeyGraveAccent,
+		"World1":       glfw.KeyWorld1,
+		"World2":       glfw.KeyWorld2,
+		"Escape":       glfw.KeyEscape,
+		"Enter":        glfw.KeyEnter,
+		"Tab":          glfw.KeyTab,
+		"Backspace":    glfw.KeyBackspace,
+		"Insert":       glfw.KeyInsert,
+		"Delete":       glfw.KeyDelete,
+		"Right":        glfw.KeyRight,
+		"Left":         glfw.KeyLeft,
+		"Down":         glfw.KeyDown,
+		"Up":           glfw.KeyUp,
+		"PageUp":       glfw.KeyPageUp,
+		"PageDown":     glfw.KeyPageDown,
+		"Home":         glfw.KeyHome,
+		"End":          glfw.KeyEnd,
+		"CapsLock":     glfw.KeyCapsLock,
+		"ScrollLock":   glfw.KeyScrollLock,
+		"NumLock":      glfw.KeyNumLock,
+		"PrintScreen":  glfw.KeyPrintScreen,
+		"Pause":        glfw.KeyPause,
+		"LeftShift":    glfw.KeyLeftShift,
+		"LeftControl":  glfw.KeyLeftControl,
+		"LeftAlt":      glfw.KeyLeftAlt,
+		"LeftSuper":    glfw.KeyLeftSuper,
+		"RightShift":   glfw.KeyRightShift,
+		"RightControl": glfw.KeyRightControl,
+		"RightAlt":     glfw.KeyRightAlt,
+		"RightSuper":   glfw.KeyRightSuper,
+		"Menu":         glfw.KeyMenu,
+		"Last":         glfw.KeyLast,
+	}
+	nameToJSKeyCodes = map[string][]string{
 		"Comma":        {"Comma"},
 		"Period":       {"Period"},
 		"Alt":          {"AltLeft", "AltRight"},
@@ -77,28 +124,43 @@ func init() {
 	}
 	// ASCII: 0 - 9
 	for c := '0'; c <= '9'; c++ {
-		nameToCodes[string(c)] = []string{"Digit" + string(c)}
+		nameToGLFWKeys[string(c)] = glfw.Key0 + glfw.Key(c) - '0'
+		nameToJSKeyCodes[string(c)] = []string{"Digit" + string(c)}
 	}
 	// ASCII: A - Z
 	for c := 'A'; c <= 'Z'; c++ {
-		nameToCodes[string(c)] = []string{"Key" + string(c)}
+		nameToGLFWKeys[string(c)] = glfw.KeyA + glfw.Key(c) - 'A'
+		nameToJSKeyCodes[string(c)] = []string{"Key" + string(c)}
 	}
 	// Function keys
 	for i := 1; i <= 12; i++ {
-		nameToCodes["F"+strconv.Itoa(i)] = []string{"F" + strconv.Itoa(i)}
+		name := "F" + strconv.Itoa(i)
+		nameToGLFWKeys[name] = glfw.KeyF1 + glfw.Key(i) - 1
+		nameToJSKeyCodes[name] = []string{name}
 	}
 	// Numpad
 	// https://www.w3.org/TR/uievents-code/#key-numpad-section
 	for c := '0'; c <= '9'; c++ {
-		nameToCodes["KP"+string(c)] = []string{"Numpad" + string(c)}
+		name := "KP" + string(c)
+		nameToGLFWKeys[name] = glfw.KeyKP0 + glfw.Key(c) - '0'
+		nameToJSKeyCodes[name] = []string{"Numpad" + string(c)}
 	}
-	nameToCodes["KPDecimal"] = []string{"NumpadDecimal"}
-	nameToCodes["KPDivide"] = []string{"NumpadDivide"}
-	nameToCodes["KPMultiply"] = []string{"NumpadMultiply"}
-	nameToCodes["KPSubtract"] = []string{"NumpadSubtract"}
-	nameToCodes["KPAdd"] = []string{"NumpadAdd"}
-	nameToCodes["KPEnter"] = []string{"NumpadEnter"}
-	nameToCodes["KPEqual"] = []string{"NumpadEqual"}
+
+	nameToGLFWKeys["KPDecimal"] = glfw.KeyKPDecimal
+	nameToGLFWKeys["KPDivide"] = glfw.KeyKPDivide
+	nameToGLFWKeys["KPMultiply"] = glfw.KeyKPMultiply
+	nameToGLFWKeys["KPSubtract"] = glfw.KeyKPSubtract
+	nameToGLFWKeys["KPAdd"] = glfw.KeyKPAdd
+	nameToGLFWKeys["KPEnter"] = glfw.KeyKPEnter
+	nameToGLFWKeys["KPEqual"] = glfw.KeyKPEqual
+
+	nameToJSKeyCodes["KPDecimal"] = []string{"NumpadDecimal"}
+	nameToJSKeyCodes["KPDivide"] = []string{"NumpadDivide"}
+	nameToJSKeyCodes["KPMultiply"] = []string{"NumpadMultiply"}
+	nameToJSKeyCodes["KPSubtract"] = []string{"NumpadSubtract"}
+	nameToJSKeyCodes["KPAdd"] = []string{"NumpadAdd"}
+	nameToJSKeyCodes["KPEnter"] = []string{"NumpadEnter"}
+	nameToJSKeyCodes["KPEqual"] = []string{"NumpadEqual"}
 }
 
 func init() {
@@ -234,7 +296,7 @@ const inputKeysGlfwTmpl = `{{.License}}
 package input
 
 import (
-	glfw "github.com/go-gl/glfw/v3.2/glfw"
+	"github.com/hajimehoshi/ebiten/internal/glfw"
 )
 
 var glfwKeyCodeToKey = map[glfw.Key]Key{
@@ -258,7 +320,7 @@ const inputKeysJSTmpl = `{{.License}}
 package input
 
 var keyToCodes = map[Key][]string{
-{{range $name, $codes := .NameToCodes}}Key{{$name}}: []string{
+{{range $name, $codes := .NameToJSKeyCodes}}Key{{$name}}: []string{
 {{range $code := $codes}}"{{$code}}",{{end}}
 },
 {{end}}
@@ -268,6 +330,20 @@ var keyCodeToKeyEdge = map[int]Key{
 {{range $code, $name := .KeyCodeToNameEdge}}{{$code}}: Key{{$name}},
 {{end}}
 }
+`
+
+const glfwKeysTmpl = `{{.License}}
+
+{{.DoNotEdit}}
+
+{{.BuildTag}}
+
+package glfw
+
+const (
+{{range $name, $key := .NameToGLFWKeys}}Key{{$name}} = Key({{$key}})
+{{end}}
+)
 `
 
 type KeyNames []string
@@ -348,19 +424,29 @@ func (k KeyNames) Swap(i, j int) {
 	k[i], k[j] = k[j], k[i]
 }
 
-func main() {
-	license, err := internal.LicenseComment()
-	if err != nil {
-		log.Fatal(err)
-	}
+const license = `// Copyright 2013 The Ebiten Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+`
 
+func main() {
 	// Follow the standard comment rule (https://golang.org/s/generatedcode).
 	doNotEdit := "// Code generated by genkeys.go using 'go generate'. DO NOT EDIT."
 
 	namesSet := map[string]struct{}{}
 	namesWithoutModsSet := map[string]struct{}{}
 	codes := []string{}
-	for name, cs := range nameToCodes {
+	for name, cs := range nameToJSKeyCodes {
 		namesSet[name] = struct{}{}
 		codes = append(codes, cs...)
 		if name != "Alt" && name != "Control" && name != "Shift" {
@@ -385,6 +471,7 @@ func main() {
 		"internal/input/keys.go":      inputKeysTmpl,
 		"internal/input/keys_glfw.go": inputKeysGlfwTmpl,
 		"internal/input/keys_js.go":   inputKeysJSTmpl,
+		"internal/glfw/keys.go":       glfwKeysTmpl,
 	} {
 		f, err := os.Create(path)
 		if err != nil {
@@ -417,12 +504,13 @@ func main() {
 			"License":             license,
 			"DoNotEdit":           doNotEdit,
 			"BuildTag":            buildTag,
-			"NameToCodes":         nameToCodes,
+			"NameToJSKeyCodes":    nameToJSKeyCodes,
 			"KeyCodeToNameEdge":   keyCodeToNameEdge,
 			"Codes":               codes,
 			"KeyNames":            names,
 			"LastKeyName":         names[len(names)-1],
 			"KeyNamesWithoutMods": namesWithoutMods,
+			"NameToGLFWKeys":      nameToGLFWKeys,
 		}); err != nil {
 			log.Fatal(err)
 		}

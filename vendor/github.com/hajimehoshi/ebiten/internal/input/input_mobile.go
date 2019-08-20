@@ -36,6 +36,10 @@ func (i *Input) IsKeyPressed(key Key) bool {
 	return false
 }
 
+func (i *Input) Wheel() (xoff, yoff float64) {
+	return 0, 0
+}
+
 func (i *Input) IsMouseButtonPressed(key MouseButton) bool {
 	return false
 }

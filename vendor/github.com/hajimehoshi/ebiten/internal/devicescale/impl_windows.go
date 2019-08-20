@@ -18,80 +18,235 @@ package devicescale
 
 import (
 	"fmt"
-	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
-const logPixelSx = 88
+const (
+	logPixelsX              = 88
+	monitorDefaultToNearest = 2
+	mdtEffectiveDpi         = 0
+)
+
+type rect struct {
+	left   int32
+	top    int32
+	right  int32
+	bottom int32
+}
 
 var (
-	user32 = syscall.NewLazyDLL("user32")
-	gdi32  = syscall.NewLazyDLL("gdi32")
+	user32 = windows.NewLazySystemDLL("user32")
+	gdi32  = windows.NewLazySystemDLL("gdi32")
+	shcore = windows.NewLazySystemDLL("shcore")
 )
 
 var (
 	procSetProcessDPIAware = user32.NewProc("SetProcessDPIAware")
 	procGetWindowDC        = user32.NewProc("GetWindowDC")
 	procReleaseDC          = user32.NewProc("ReleaseDC")
-	procGetDeviceCaps      = gdi32.NewProc("GetDeviceCaps")
+	procMonitorFromRect    = user32.NewProc("MonitorFromRect")
+	procGetMonitorInfo     = user32.NewProc("GetMonitorInfoW")
+
+	procGetDeviceCaps = gdi32.NewProc("GetDeviceCaps")
+
+	// GetScaleFactorForMonitor function can return unrelaiavle value (e.g. returning 180
+	// for 200% scale). Use GetDpiForMonitor instead.
+	procGetDpiForMonitor = shcore.NewProc("GetDpiForMonitor")
 )
 
+var shcoreAvailable = false
+
+type winErr struct {
+	FuncName string
+	Code     windows.Errno
+	Return   uintptr
+}
+
+func (e *winErr) Error() string {
+	return fmt.Sprintf("devicescale: %s failed: error code: %d", e.FuncName, e.Code)
+}
+
+func init() {
+	if shcore.Load() == nil {
+		shcoreAvailable = true
+	}
+}
+
 func setProcessDPIAware() error {
-	r, _, e := syscall.Syscall(procSetProcessDPIAware.Addr(), 0, 0, 0, 0)
-	if e != 0 {
-		return fmt.Errorf("devicescale: SetProcessDPIAware failed: error code: %d", e)
+	r, _, e := procSetProcessDPIAware.Call()
+	if e != nil && e.(windows.Errno) != 0 {
+		return &winErr{
+			FuncName: "SetProcessDPIAware",
+			Code:     e.(windows.Errno),
+		}
 	}
 	if r == 0 {
-		return fmt.Errorf("devicescale: SetProcessDPIAware failed: returned value: %d", r)
+		return &winErr{
+			FuncName: "SetProcessDPIAware",
+			Return:   r,
+		}
 	}
 	return nil
 }
 
 func getWindowDC(hwnd uintptr) (uintptr, error) {
-	r, _, e := syscall.Syscall(procGetWindowDC.Addr(), 1, hwnd, 0, 0)
-	if e != 0 {
-		return 0, fmt.Errorf("devicescale: GetWindowDC failed: error code: %d", e)
+	r, _, e := procGetWindowDC.Call(hwnd)
+	if e != nil && e.(windows.Errno) != 0 {
+		return 0, &winErr{
+			FuncName: "GetWindowDC",
+			Code:     e.(windows.Errno),
+		}
 	}
 	if r == 0 {
-		return 0, fmt.Errorf("devicescale: GetWindowDC failed: returned value: %d", r)
+		return 0, &winErr{
+			FuncName: "GetWindowDC",
+			Return:   r,
+		}
 	}
 	return r, nil
 }
 
 func releaseDC(hwnd, hdc uintptr) error {
-	r, _, e := syscall.Syscall(procReleaseDC.Addr(), 2, hwnd, hdc, 0)
-	if e != 0 {
-		return fmt.Errorf("devicescale: ReleaseDC failed: error code: %d", e)
+	r, _, e := procReleaseDC.Call(hwnd, hdc)
+	if e != nil && e.(windows.Errno) != 0 {
+		return &winErr{
+			FuncName: "ReleaseDC",
+			Code:     e.(windows.Errno),
+		}
 	}
 	if r == 0 {
-		return fmt.Errorf("devicescale: ReleaseDC failed: returned value: %d", r)
+		return &winErr{
+			FuncName: "ReleaseDC",
+			Return:   r,
+		}
 	}
 	return nil
 }
 
 func getDeviceCaps(hdc uintptr, nindex int) (int, error) {
-	r, _, e := syscall.Syscall(procGetDeviceCaps.Addr(), 2, hdc, uintptr(nindex), 0)
-	if e != 0 {
-		return 0, fmt.Errorf("devicescale: GetDeviceCaps failed: error code: %d", e)
+	r, _, e := procGetDeviceCaps.Call(hdc, uintptr(nindex))
+	if e != nil && e.(windows.Errno) != 0 {
+		return 0, &winErr{
+			FuncName: "GetDeviceCaps",
+			Code:     e.(windows.Errno),
+		}
 	}
 	return int(r), nil
 }
 
-func impl() float64 {
-	if err := setProcessDPIAware(); err != nil {
+func monitorFromRect(lprc uintptr, dwFlags int) (uintptr, error) {
+	r, _, e := procMonitorFromRect.Call(lprc, uintptr(dwFlags))
+	if e != nil && e.(windows.Errno) != 0 {
+		return 0, &winErr{
+			FuncName: "MonitorFromRect",
+			Code:     e.(windows.Errno),
+		}
+	}
+	if r == 0 {
+		return 0, &winErr{
+			FuncName: "MonitorFromRect",
+			Return:   r,
+		}
+	}
+	return r, nil
+}
+
+func getMonitorInfo(hMonitor uintptr, lpMonitorInfo uintptr) error {
+	r, _, e := procGetMonitorInfo.Call(hMonitor, lpMonitorInfo)
+	if e != nil && e.(windows.Errno) != 0 {
+		return &winErr{
+			FuncName: "GetMonitorInfo",
+			Code:     e.(windows.Errno),
+		}
+	}
+	if r == 0 {
+		return &winErr{
+			FuncName: "GetMonitorInfo",
+			Return:   r,
+		}
+	}
+	return nil
+}
+
+func getDpiForMonitor(hMonitor uintptr, dpiType uintptr, dpiX, dpiY uintptr) error {
+	r, _, e := procGetDpiForMonitor.Call(hMonitor, dpiType, dpiX, dpiY)
+	if e != nil && e.(windows.Errno) != 0 {
+		return &winErr{
+			FuncName: "GetDpiForMonitor",
+			Code:     e.(windows.Errno),
+		}
+	}
+	if r != 0 {
+		return &winErr{
+			FuncName: "GetDpiForMonitor",
+			Return:   r,
+		}
+	}
+	return nil
+}
+
+func getFromLogPixelSx() float64 {
+	dc, err := getWindowDC(0)
+	if err != nil {
+		const (
+			errorInvalidWindowHandle  = 1400
+			errorResourceDataNotFound = 1812
+		)
+		// On Wine, it looks like GetWindowDC(0) doesn't work (#738, #743).
+		code := err.(*winErr).Code
+		if code == errorInvalidWindowHandle {
+			return 1
+		}
+		if code == errorResourceDataNotFound {
+			return 1
+		}
 		panic(err)
 	}
 
-	dc, err := getWindowDC(0)
+	// Note that GetDeviceCaps with LOGPIXELSX always returns a same value for any monitors
+	// even if multiple monitors are used.
+	dpi, err := getDeviceCaps(dc, logPixelsX)
 	if err != nil {
 		panic(err)
 	}
-	dpi, err := getDeviceCaps(dc, logPixelSx)
-	if err != nil {
-		panic(err)
-	}
+
 	if err := releaseDC(0, dc); err != nil {
 		panic(err)
 	}
 
 	return float64(dpi) / 96
+}
+
+func impl(x, y int) float64 {
+	if err := setProcessDPIAware(); err != nil {
+		panic(err)
+	}
+
+	// On Windows 7 or older, shcore.dll is not available.
+	if !shcoreAvailable {
+		return getFromLogPixelSx()
+	}
+
+	lprc := rect{
+		left:   int32(x),
+		right:  int32(x + 1),
+		top:    int32(y),
+		bottom: int32(y + 1),
+	}
+
+	// MonitorFromPoint requires to pass a POINT value, and there seems no portable way to
+	// do this with Cgo. Use MonitorFromRect instead.
+	m, err := monitorFromRect(uintptr(unsafe.Pointer(&lprc)), monitorDefaultToNearest)
+	if err != nil {
+		panic(err)
+	}
+
+	dpiX := uint32(0)
+	dpiY := uint32(0) // Passing dpiY is needed even though this is not used.
+	if err := getDpiForMonitor(m, mdtEffectiveDpi, uintptr(unsafe.Pointer(&dpiX)), uintptr(unsafe.Pointer(&dpiY))); err != nil {
+		panic(err)
+	}
+	return float64(dpiX) / 96
 }

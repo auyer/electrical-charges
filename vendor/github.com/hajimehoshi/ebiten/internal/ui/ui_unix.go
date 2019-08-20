@@ -20,12 +20,31 @@ package ui
 
 import (
 	"github.com/hajimehoshi/ebiten/internal/devicescale"
+	"github.com/hajimehoshi/ebiten/internal/glfw"
 )
 
 func glfwScale() float64 {
-	return devicescale.DeviceScale()
+	// This function must be called on the main thread.
+	cm, ok := getCachedMonitor(currentUI.window.GetPos())
+	if !ok {
+		return devicescale.GetAt(currentUI.currentMonitor().GetPos())
+	}
+	return devicescale.GetAt(cm.x, cm.y)
 }
 
 func adjustWindowPosition(x, y int) (int, int) {
 	return x, y
+}
+
+func (u *userInterface) currentMonitorFromPosition() *glfw.Monitor {
+	// TODO: Return more appropriate display.
+	if cm, ok := getCachedMonitor(u.window.GetPos()); ok {
+		return cm.m
+	}
+	return glfw.GetPrimaryMonitor()
+}
+
+func (u *userInterface) nativeWindow() uintptr {
+	// TODO: Implement this.
+	return 0
 }

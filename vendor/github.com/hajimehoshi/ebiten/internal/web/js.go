@@ -17,21 +17,22 @@
 package web
 
 import (
+	"runtime"
 	"strings"
 
-	"github.com/gopherjs/gopherjs/js"
+	"github.com/gopherjs/gopherwasm/js"
 )
 
-func IsNodeJS() bool {
-	return js.Global.Get("require") != js.Undefined
+func IsGopherJS() bool {
+	return runtime.GOOS != "js"
 }
 
 func IsBrowser() bool {
-	return !IsNodeJS()
+	return true
 }
 
 func IsIOSSafari() bool {
-	ua := js.Global.Get("navigator").Get("userAgent").String()
+	ua := js.Global().Get("navigator").Get("userAgent").String()
 	if !strings.Contains(ua, "iPhone") {
 		return false
 	}
@@ -39,7 +40,7 @@ func IsIOSSafari() bool {
 }
 
 func IsAndroidChrome() bool {
-	ua := js.Global.Get("navigator").Get("userAgent").String()
+	ua := js.Global().Get("navigator").Get("userAgent").String()
 	if !strings.Contains(ua, "Android") {
 		return false
 	}

@@ -16,7 +16,7 @@
 
 package web
 
-func IsNodeJS() bool {
+func IsGopherJS() bool {
 	return false
 }
 

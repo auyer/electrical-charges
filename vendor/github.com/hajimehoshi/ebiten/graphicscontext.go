@@ -15,12 +15,15 @@
 package ebiten
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/hajimehoshi/ebiten/internal/clock"
-	"github.com/hajimehoshi/ebiten/internal/graphics"
+	"github.com/hajimehoshi/ebiten/internal/graphicscommand"
+	"github.com/hajimehoshi/ebiten/internal/graphicsdriver"
 	"github.com/hajimehoshi/ebiten/internal/hooks"
 	"github.com/hajimehoshi/ebiten/internal/shareable"
 	"github.com/hajimehoshi/ebiten/internal/ui"
-	"github.com/hajimehoshi/ebiten/internal/web"
 )
 
 func newGraphicsContext(f func(*Image) error) *graphicsContext {
@@ -30,13 +33,16 @@ func newGraphicsContext(f func(*Image) error) *graphicsContext {
 }
 
 type graphicsContext struct {
-	f           func(*Image) error
-	offscreen   *Image
-	screen      *Image
-	initialized bool
-	invalidated bool // browser only
-	offsetX     float64
-	offsetY     float64
+	f            func(*Image) error
+	offscreen    *Image
+	screen       *Image
+	screenWidth  int
+	screenHeight int
+	screenScale  float64
+	initialized  bool
+	invalidated  bool // browser only
+	offsetX      float64
+	offsetY      float64
 }
 
 func (c *graphicsContext) Invalidate() {
@@ -48,18 +54,24 @@ func (c *graphicsContext) Invalidate() {
 }
 
 func (c *graphicsContext) SetSize(screenWidth, screenHeight int, screenScale float64) {
+	c.screenScale = screenScale
+
 	if c.screen != nil {
 		_ = c.screen.Dispose()
 	}
 	if c.offscreen != nil {
 		_ = c.offscreen.Dispose()
 	}
-	c.offscreen = newVolatileImage(screenWidth, screenHeight)
+	c.offscreen, _ = NewImage(screenWidth, screenHeight, FilterDefault)
+	c.offscreen.makeVolatile()
 
-	w := int(float64(screenWidth) * screenScale)
-	h := int(float64(screenHeight) * screenScale)
-	px0, py0, _, _ := ui.ScreenPadding()
-	c.screen = newImageWithScreenFramebuffer(w, h)
+	// Round up the screensize not to cause glitches e.g. on Xperia (#622)
+	w := int(math.Ceil(float64(screenWidth) * screenScale))
+	h := int(math.Ceil(float64(screenHeight) * screenScale))
+	px0, py0, px1, py1 := ui.ScreenPadding()
+	c.screen = newImageWithScreenFramebuffer(w+int(math.Ceil(px0+px1)), h+int(math.Ceil(py0+py1)))
+	c.screenWidth = w
+	c.screenHeight = h
 
 	c.offsetX = px0
 	c.offsetY = py0
@@ -67,7 +79,7 @@ func (c *graphicsContext) SetSize(screenWidth, screenHeight int, screenScale flo
 
 func (c *graphicsContext) initializeIfNeeded() error {
 	if !c.initialized {
-		if err := shareable.InitializeGLState(); err != nil {
+		if err := shareable.InitializeGraphicsDriverState(); err != nil {
 			return err
 		}
 		c.initialized = true
@@ -79,15 +91,19 @@ func (c *graphicsContext) initializeIfNeeded() error {
 }
 
 func (c *graphicsContext) Update(afterFrameUpdate func()) error {
-	updateCount := clock.Update()
+	tps := int(MaxTPS())
+	updateCount := clock.Update(tps)
+
+	// TODO: If updateCount is 0 and vsync is disabled, swapping buffers can be skipped.
 
 	if err := c.initializeIfNeeded(); err != nil {
 		return err
 	}
 	for i := 0; i < updateCount; i++ {
-		c.offscreen.fill(0, 0, 0, 0)
+		c.offscreen.Clear()
+		// Mipmap images should be disposed by fill.
 
-		setRunningSlowly(i < updateCount-1)
+		setDrawingSkipped(i < updateCount-1)
 		if err := hooks.RunBeforeUpdateHooks(); err != nil {
 			return err
 		}
@@ -97,44 +113,45 @@ func (c *graphicsContext) Update(afterFrameUpdate func()) error {
 		afterFrameUpdate()
 	}
 
-	// Clear the screen framebuffer by DrawImage instad of Fill
-	// to clear the whole region including fullscreen's padding.
-	// TODO: This clear is needed only when the screen size is changed.
-	if c.offsetX > 0 || c.offsetY > 0 {
-		op := &DrawImageOptions{}
-		w, h := emptyImage.Size()
-		s := float64(graphics.MaxImageSize())
-		op.GeoM.Scale(s/float64(w), s/float64(h))
-		op.CompositeMode = CompositeModeCopy
-		c.screen.DrawImage(emptyImage, op)
-	}
-
-	dw, dh := c.screen.Size()
-	sw, _ := c.offscreen.Size()
-	scale := float64(dw) / float64(sw)
+	// This clear is needed for fullscreen mode or some mobile platforms (#622).
+	c.screen.Clear()
 
 	op := &DrawImageOptions{}
-	// c.screen is special: its Y axis is down to up,
-	// and the origin point is lower left.
-	op.GeoM.Scale(scale, -scale)
-	op.GeoM.Translate(0, float64(dh))
-	op.GeoM.Translate(c.offsetX, c.offsetY)
 
+	switch vd := graphicscommand.Driver().VDirection(); vd {
+	case graphicsdriver.VDownward:
+		// c.screen is special: its Y axis is down to up,
+		// and the origin point is lower left.
+		op.GeoM.Scale(c.screenScale, -c.screenScale)
+		op.GeoM.Translate(0, float64(c.screenHeight))
+	case graphicsdriver.VUpward:
+		op.GeoM.Scale(c.screenScale, c.screenScale)
+	default:
+		panic(fmt.Sprintf("ebiten: invalid v-direction: %d", vd))
+	}
+
+	op.GeoM.Translate(c.offsetX, c.offsetY)
 	op.CompositeMode = CompositeModeCopy
-	op.Filter = filterScreen
+
+	// filterScreen works with >=1 scale, but does not well with <1 scale.
+	// Use regular FilterLinear instead so far (#669).
+	if c.screenScale >= 1 {
+		op.Filter = filterScreen
+	} else {
+		op.Filter = FilterLinear
+	}
 	_ = c.screen.DrawImage(c.offscreen, op)
 
-	if err := shareable.ResolveStaleImages(); err != nil {
+	shareable.ResolveStaleImages()
+
+	if err := shareable.Error(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (c *graphicsContext) needsRestoring() (bool, error) {
-	if web.IsBrowser() {
-		return c.invalidated, nil
-	}
-	return c.offscreen.shareableImage.IsInvalidated()
+	return c.offscreen.mipmap.original().IsInvalidated()
 }
 
 func (c *graphicsContext) restoreIfNeeded() error {

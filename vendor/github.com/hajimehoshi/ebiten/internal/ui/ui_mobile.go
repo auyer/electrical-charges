@@ -31,8 +31,9 @@ import (
 	"golang.org/x/mobile/gl"
 
 	"github.com/hajimehoshi/ebiten/internal/devicescale"
+	"github.com/hajimehoshi/ebiten/internal/graphicsdriver/opengl"
+	"github.com/hajimehoshi/ebiten/internal/hooks"
 	"github.com/hajimehoshi/ebiten/internal/input"
-	"github.com/hajimehoshi/ebiten/internal/opengl"
 )
 
 var (
@@ -51,8 +52,10 @@ func Render(chError <-chan error) error {
 	}
 	// TODO: Check this is called on the rendering thread
 	select {
+	case err := <-chError:
+		return err
 	case renderCh <- struct{}{}:
-		return opengl.GetContext().DoWork(chError, renderChEnd)
+		return opengl.Get().DoWork(renderChEnd)
 	case <-time.After(500 * time.Millisecond):
 		// This function must not be blocked. We need to break for timeout.
 		return nil
@@ -71,6 +74,21 @@ type userInterface struct {
 	fullscreenHeightPx int
 
 	m sync.RWMutex
+}
+
+var (
+	deviceScaleVal float64
+	deviceScaleM   sync.Mutex
+)
+
+func getDeviceScale() float64 {
+	deviceScaleM.Lock()
+	defer deviceScaleM.Unlock()
+
+	if deviceScaleVal == 0 {
+		deviceScaleVal = devicescale.GetAt(0, 0)
+	}
+	return deviceScaleVal
 }
 
 // appMain is the main routine for gomobile-build mode.
@@ -106,7 +124,7 @@ func appMain(a app.App) {
 		case touch.Event:
 			switch e.Type {
 			case touch.TypeBegin, touch.TypeMove:
-				s := devicescale.DeviceScale()
+				s := getDeviceScale()
 				x, y := float64(e.X)/s, float64(e.Y)/s
 				// TODO: Is it ok to cast from int64 to int here?
 				t := input.NewTouch(int(e.Sequence), int(x), int(y))
@@ -136,11 +154,13 @@ func Run(width, height int, scale float64, title string, g GraphicsContext, main
 
 	if mainloop {
 		ctx := <-glContextCh
-		opengl.InitWithContext(ctx)
+		opengl.Get().InitWithContext(ctx)
 	} else {
-		opengl.Init()
+		opengl.Get().Init()
 	}
 
+	// Force to set the screen size
+	u.updateGraphicsContext(g)
 	for {
 		if err := u.update(g); err != nil {
 			return err
@@ -148,11 +168,10 @@ func Run(width, height int, scale float64, title string, g GraphicsContext, main
 	}
 }
 
-// RunMainThreadLoop runs the main routine for gomobile-build.
-func RunMainThreadLoop(ch <-chan error) error {
+// Loop runs the main routine for gomobile-build.
+func Loop(ch <-chan error) error {
 	go func() {
-		// As mobile apps never ends, RunMainThreadLoop can't return.
-		// Just panic here.
+		// As mobile apps never ends, Loop can't return. Just panic here.
 		err := <-ch
 		panic(err)
 	}()
@@ -169,7 +188,7 @@ func (u *userInterface) updateGraphicsContext(g GraphicsContext) {
 	if sizeChanged {
 		width = u.width
 		height = u.height
-		actualScale = u.scaleImpl() * devicescale.DeviceScale()
+		actualScale = u.scaleImpl() * getDeviceScale()
 	}
 	u.sizeChanged = false
 	u.m.Unlock()
@@ -186,7 +205,7 @@ func actualScale() float64 {
 
 func (u *userInterface) actualScale() float64 {
 	u.m.Lock()
-	s := u.scaleImpl() * devicescale.DeviceScale()
+	s := u.scaleImpl() * getDeviceScale()
 	u.m.Unlock()
 	return s
 }
@@ -200,12 +219,21 @@ func (u *userInterface) scaleImpl() float64 {
 }
 
 func (u *userInterface) update(g GraphicsContext) error {
-	<-renderCh
+render:
+	for {
+		select {
+		case <-renderCh:
+			break render
+		case <-time.After(500 * time.Millisecond):
+			hooks.SuspendAudio()
+			continue
+		}
+	}
+	hooks.ResumeAudio()
+
 	defer func() {
 		renderChEnd <- struct{}{}
 	}()
-
-	u.updateGraphicsContext(g)
 
 	if err := g.Update(func() {
 		u.updateGraphicsContext(g)
@@ -226,7 +254,7 @@ func (u *userInterface) screenSize() (int, int) {
 	return w, h
 }
 
-func MonitorSize() (int, int) {
+func ScreenSizeInFullscreen() (int, int) {
 	// TODO: This function should return fullscreenWidthPx, fullscreenHeightPx,
 	// but these values are not initialized until the main loop starts.
 	return 0, 0
@@ -294,7 +322,7 @@ func (u *userInterface) updateFullscreenScaleIfNeeded() {
 	if scale > scaleY {
 		scale = scaleY
 	}
-	u.fullscreenScale = scale / devicescale.DeviceScale()
+	u.fullscreenScale = scale / getDeviceScale()
 	u.sizeChanged = true
 }
 
@@ -313,7 +341,7 @@ func (u *userInterface) screenPaddingImpl() (x0, y0, x1, y1 float64) {
 	if u.fullscreenScale == 0 {
 		return 0, 0, 0, 0
 	}
-	s := u.fullscreenScale * devicescale.DeviceScale()
+	s := u.fullscreenScale * getDeviceScale()
 	ox := (float64(u.fullscreenWidthPx) - float64(u.width)*s) / 2
 	oy := (float64(u.fullscreenHeightPx) - float64(u.height)*s) / 2
 	return ox, oy, ox, oy
@@ -337,7 +365,7 @@ func (u *userInterface) adjustPosition(x, y int) (int, int) {
 	u.m.Lock()
 	ox, oy, _, _ := u.screenPaddingImpl()
 	s := u.scaleImpl()
-	as := s * devicescale.DeviceScale()
+	as := s * getDeviceScale()
 	u.m.Unlock()
 	return int(float64(x)/s - ox/as), int(float64(y)/s - oy/as)
 }
@@ -382,6 +410,26 @@ func SetWindowDecorated(decorated bool) {
 	// Do nothing
 }
 
+func IsWindowResizable() bool {
+	return false
+}
+
+func SetWindowResizable(decorated bool) {
+	// Do nothing
+}
+
+func IsVsyncEnabled() bool {
+	return true
+}
+
+func SetVsyncEnabled(enabled bool) {
+	// Do nothing
+}
+
 func UpdateTouches(touches []*input.Touch) {
 	input.Get().UpdateTouches(touches)
+}
+
+func DeviceScaleFactor() float64 {
+	return getDeviceScale()
 }

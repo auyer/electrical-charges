@@ -22,48 +22,40 @@ import (
 )
 
 var (
-	debugPrintTextImage       *ebiten.Image
-	debugPrintTextShadowImage *ebiten.Image
+	debugPrintTextImage *ebiten.Image
 )
 
 func init() {
 	img := assets.CreateTextImage()
 	debugPrintTextImage, _ = ebiten.NewImageFromImage(img, ebiten.FilterDefault)
-
-	// Using color matrices for shadow color is not efficient.
-	// Instead, use a different image, that shares the same texture in highly possibility.
-	s := img.Bounds().Size()
-	for j := 0; j < s.Y; j++ {
-		for i := 0; i < s.X; i++ {
-			idx := (img.Stride)*j + 4*i
-			if img.Pix[idx+3] != 0 {
-				img.Pix[idx] = 0
-				img.Pix[idx+1] = 0
-				img.Pix[idx+2] = 0
-				img.Pix[idx+3] = 0x80
-			}
-		}
-	}
-	debugPrintTextShadowImage, _ = ebiten.NewImageFromImage(img, ebiten.FilterDefault)
 }
 
-// DebugPrint draws the string str on the image.
+// DebugPrint draws the string str on the image on left top corner.
 //
 // The available runes are in U+0000 to U+00FF, which is C0 Controls and Basic Latin and C1 Controls and Latin-1 Supplement.
 //
 // DebugPrint always returns nil as of 1.5.0-alpha.
 func DebugPrint(image *ebiten.Image, str string) error {
-	drawDebugText(image, str, 1, 1, debugPrintTextShadowImage)
-	drawDebugText(image, str, 0, 0, debugPrintTextImage)
+	DebugPrintAt(image, str, 0, 0)
 	return nil
 }
 
-func drawDebugText(rt *ebiten.Image, str string, ox, oy int, src *ebiten.Image) {
+// DebugPrintAt draws the string str on the image at (x, y) position.
+//
+// The available runes are in U+0000 to U+00FF, which is C0 Controls and Basic Latin and C1 Controls and Latin-1 Supplement.
+func DebugPrintAt(image *ebiten.Image, str string, x, y int) {
+	drawDebugText(image, str, x+1, y+1, true)
+	drawDebugText(image, str, x, y, false)
+}
+
+func drawDebugText(rt *ebiten.Image, str string, ox, oy int, shadow bool) {
 	op := &ebiten.DrawImageOptions{}
+	if shadow {
+		op.ColorM.Scale(0, 0, 0, 0.5)
+	}
 	x := 0
 	y := 0
 	w, _ := debugPrintTextImage.Size()
-	var r image.Rectangle
 	for _, c := range str {
 		const (
 			cw = assets.CharWidth
@@ -77,15 +69,10 @@ func drawDebugText(rt *ebiten.Image, str string, ox, oy int, src *ebiten.Image) 
 		n := w / cw
 		sx := (int(c) % n) * cw
 		sy := (int(c) / n) * ch
-		r.Min.X = sx
-		r.Min.Y = sy
-		r.Max.X = sx + cw
-		r.Max.Y = sy + ch
-		op.SourceRect = &r
 		op.GeoM.Reset()
 		op.GeoM.Translate(float64(x), float64(y))
 		op.GeoM.Translate(float64(ox+1), float64(oy))
-		_ = rt.DrawImage(src, op)
+		_ = rt.DrawImage(debugPrintTextImage.SubImage(image.Rect(sx, sy, sx+cw, sy+ch)).(*ebiten.Image), op)
 		x += cw
 	}
 }

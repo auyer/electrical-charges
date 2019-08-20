@@ -19,15 +19,11 @@ import (
 )
 
 var (
-	scale = 0.0
-	m     sync.Mutex
+	m sync.Mutex
 )
 
-func DeviceScale() float64 {
+func GetAt(x, y int) float64 {
 	m.Lock()
 	defer m.Unlock()
-	if scale == 0.0 {
-		scale = impl()
-	}
-	return scale
+	return impl(x, y)
 }

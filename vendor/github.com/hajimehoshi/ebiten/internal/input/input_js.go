@@ -19,7 +19,7 @@ package input
 import (
 	"unicode"
 
-	"github.com/gopherjs/gopherjs/js"
+	"github.com/gopherjs/gopherwasm/js"
 )
 
 type mockRWLock struct{}
@@ -35,6 +35,8 @@ type Input struct {
 	mouseButtonPressed map[int]bool
 	cursorX            int
 	cursorY            int
+	wheelX             float64
+	wheelY             float64
 	gamepads           [16]gamePad
 	touches            []*Touch
 	runeBuffer         []rune
@@ -47,6 +49,11 @@ func (i *Input) RuneBuffer() []rune {
 
 func (i *Input) ClearRuneBuffer() {
 	i.runeBuffer = nil
+}
+
+func (i *Input) ResetWheelValues() {
+	i.wheelX = 0
+	i.wheelY = 0
 }
 
 func (i *Input) IsKeyPressed(key Key) bool {
@@ -89,6 +96,10 @@ func (i *Input) IsMouseButtonPressed(button MouseButton) bool {
 		}
 	}
 	return false
+}
+
+func (i *Input) Wheel() (xoff, yoff float64) {
+	return i.wheelX, i.wheelY
 }
 
 func (i *Input) keyDown(code string) {
@@ -138,8 +149,8 @@ func (i *Input) setMouseCursor(x, y int) {
 }
 
 func (i *Input) UpdateGamepads() {
-	nav := js.Global.Get("navigator")
-	if nav.Get("getGamepads") == js.Undefined {
+	nav := js.Global().Get("navigator")
+	if nav.Get("getGamepads") == js.Undefined() {
 		return
 	}
 	gamepads := nav.Call("getGamepads")
@@ -147,7 +158,7 @@ func (i *Input) UpdateGamepads() {
 	for id := 0; id < l; id++ {
 		i.gamepads[id].valid = false
 		gamepad := gamepads.Index(id)
-		if gamepad == js.Undefined || gamepad == nil {
+		if gamepad == js.Undefined() || gamepad == js.Null() {
 			continue
 		}
 		i.gamepads[id].valid = true
@@ -176,9 +187,9 @@ func (i *Input) UpdateGamepads() {
 	}
 }
 
-func OnKeyDown(e *js.Object) {
+func OnKeyDown(e js.Value) {
 	c := e.Get("code")
-	if c == js.Undefined {
+	if c == js.Undefined() {
 		code := e.Get("keyCode").Int()
 		if keyCodeToKeyEdge[code] == KeyUp ||
 			keyCodeToKeyEdge[code] == KeyDown ||
@@ -203,16 +214,14 @@ func OnKeyDown(e *js.Object) {
 	theInput.keyDown(cs)
 }
 
-func OnKeyPress(e *js.Object) {
-	e.Call("preventDefault")
+func OnKeyPress(e js.Value) {
 	if r := rune(e.Get("charCode").Int()); unicode.IsPrint(r) {
 		theInput.runeBuffer = append(theInput.runeBuffer, r)
 	}
 }
 
-func OnKeyUp(e *js.Object) {
-	e.Call("preventDefault")
-	if e.Get("code") == js.Undefined {
+func OnKeyUp(e js.Value) {
+	if e.Get("code") == js.Undefined() {
 		// Assume that UA is Edge.
 		code := e.Get("keyCode").Int()
 		theInput.keyUpEdge(code)
@@ -222,46 +231,46 @@ func OnKeyUp(e *js.Object) {
 	theInput.keyUp(code)
 }
 
-func OnMouseDown(e *js.Object) {
-	e.Call("preventDefault")
+func OnMouseDown(e js.Value) {
 	button := e.Get("button").Int()
 	theInput.mouseDown(button)
 	setMouseCursorFromEvent(e)
 }
 
-func OnMouseUp(e *js.Object) {
-	e.Call("preventDefault")
+func OnMouseUp(e js.Value) {
 	button := e.Get("button").Int()
 	theInput.mouseUp(button)
 	setMouseCursorFromEvent(e)
 }
 
-func OnMouseMove(e *js.Object) {
-	e.Call("preventDefault")
+func OnMouseMove(e js.Value) {
 	setMouseCursorFromEvent(e)
 }
 
-func OnTouchStart(e *js.Object) {
-	e.Call("preventDefault")
+func OnWheel(e js.Value) {
+	// TODO: What if e.deltaMode is not DOM_DELTA_PIXEL?
+	theInput.wheelX = -e.Get("deltaX").Float()
+	theInput.wheelY = -e.Get("deltaY").Float()
+}
+
+func OnTouchStart(e js.Value) {
 	theInput.updateTouches(e)
 }
 
-func OnTouchEnd(e *js.Object) {
-	e.Call("preventDefault")
+func OnTouchEnd(e js.Value) {
 	theInput.updateTouches(e)
 }
 
-func OnTouchMove(e *js.Object) {
-	e.Call("preventDefault")
+func OnTouchMove(e js.Value) {
 	theInput.updateTouches(e)
 }
 
-func setMouseCursorFromEvent(e *js.Object) {
+func setMouseCursorFromEvent(e js.Value) {
 	x, y := e.Get("clientX").Int(), e.Get("clientY").Int()
 	theInput.setMouseCursor(x, y)
 }
 
-func (i *Input) updateTouches(e *js.Object) {
+func (i *Input) updateTouches(e js.Value) {
 	j := e.Get("targetTouches")
 	ts := make([]*Touch, j.Get("length").Int())
 	for i := 0; i < len(ts); i++ {
