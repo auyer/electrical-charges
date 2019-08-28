@@ -18,12 +18,22 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	_ "image/png"
 	"log"
 	"math/rand"
+	"strconv"
 	"time"
+
+	"golang.org/x/image/font"
+
+	"github.com/hajimehoshi/ebiten/text"
+
+	"github.com/golang/freetype/truetype"
+
+	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/ebitenutil"
@@ -35,15 +45,24 @@ func init() {
 }
 
 const (
-	screenWidth  = 320
-	screenHeight = 240
+	screenWidth  = 500
+	screenHeight = 500
 )
+
+type Font struct {
+	Face        font.Face
+	FontMHeight int
+}
 
 // Sprite represents an image.
 type Sprite struct {
-	image *ebiten.Image
-	x     int
-	y     int
+	name   string
+	image  *ebiten.Image
+	Font   font.Face
+	x      int
+	y      int
+	charge float32
+	chosen bool
 }
 
 // In returns true if (x, y) is in the sprite, and false otherwise.
@@ -84,6 +103,12 @@ func (s *Sprite) Draw(screen *ebiten.Image, dx, dy int, alpha float64) {
 	op.ColorM.Scale(1, 1, 1, alpha)
 	screen.DrawImage(s.image, op)
 	screen.DrawImage(s.image, op)
+}
+
+// Draw draws the sprite.
+func (s *Sprite) DrawStatistics(screen *ebiten.Image, dx, dy int, alpha float64) {
+	// op := &ebiten.DrawImageOptions{}
+	text.Draw(screen, fmt.Sprintf("%s Charge : %f", s.name, s.charge), s.Font, screenWidth/10, screenHeight/10, color.White)
 }
 
 // StrokeSource represents a input device to provide strokes.
@@ -205,14 +230,28 @@ func init() {
 	ebitenImage, _ := ebiten.NewImageFromImage(img, ebiten.FilterDefault)
 
 	// Initialize the sprites.
+	tt, err := truetype.Parse(goregular.TTF)
+	if err != nil {
+		log.Fatal(err)
+	}
+	uiFont := &Font{Face: truetype.NewFace(tt, &truetype.Options{
+		Size:    24,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})}
+	b, _, _ := uiFont.Face.GlyphBounds('M')
+	uiFont.FontMHeight = (b.Max.Y - b.Min.Y).Ceil()
+
 	sprites := []*Sprite{}
 	w, h := ebitenImage.Size()
 	for i := 0; i < 10; i++ {
 		s := &Sprite{
+			name:  "Q" + strconv.Itoa(i),
 			image: ebitenImage,
 			x:     rand.Intn(screenWidth - w),
 			y:     rand.Intn(screenHeight - h),
 		}
+		s.Font = uiFont.Face
 		sprites = append(sprites, s)
 	}
 
@@ -266,13 +305,27 @@ func (g *Game) updateStroke(stroke *Stroke) {
 func (g *Game) update(screen *ebiten.Image) error {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		s := NewStroke(&MouseStrokeSource{})
-		s.SetDraggingObject(g.spriteAt(s.Position()))
+		spriteAtPos := g.spriteAt(s.Position())
+		s.SetDraggingObject(spriteAtPos)
 		g.strokes[s] = struct{}{}
+		if spriteAtPos != nil {
+			for _, s := range g.sprites {
+				s.chosen = false
+			}
+			spriteAtPos.chosen = true
+		}
 	}
 	for _, id := range inpututil.JustPressedTouchIDs() {
 		s := NewStroke(&TouchStrokeSource{id})
-		s.SetDraggingObject(g.spriteAt(s.Position()))
+		spriteAtPos := g.spriteAt(s.Position())
+		s.SetDraggingObject(spriteAtPos)
 		g.strokes[s] = struct{}{}
+		if spriteAtPos != nil {
+			for _, s := range g.sprites {
+				s.chosen = false
+			}
+			spriteAtPos.chosen = true
+		}
 	}
 
 	for s := range g.strokes {
@@ -298,6 +351,10 @@ func (g *Game) update(screen *ebiten.Image) error {
 			continue
 		}
 		s.Draw(screen, 0, 0, 1)
+		if s.chosen {
+			s.DrawStatistics(screen, 0, 0, 1)
+			// fmt.Println("Printing sts for ", s.name)
+		}
 	}
 	for s := range g.strokes {
 		dx, dy := s.PositionDiff()
