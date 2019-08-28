@@ -37,7 +37,6 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/hajimehoshi/ebiten"
-	"github.com/hajimehoshi/ebiten/ebitenutil"
 	"github.com/hajimehoshi/ebiten/inpututil"
 )
 
@@ -50,8 +49,10 @@ func init() {
 }
 
 const (
-	screenWidth  = 500
-	screenHeight = 500
+	FullScreenWidth  = 500
+	FullScreenHeight = 400
+	screenWidth      = FullScreenWidth
+	screenHeight     = FullScreenHeight * .9
 )
 
 type Font struct {
@@ -59,11 +60,15 @@ type Font struct {
 	FontMHeight int
 }
 
+type relationForce struct {
+	name  string
+	force float32
+}
+
 // Sprite represents an image.
 type Sprite struct {
 	name   string
 	image  *ebiten.Image
-	Font   font.Face
 	x      int
 	y      int
 	charge float32
@@ -105,8 +110,12 @@ func (s *Sprite) MoveBy(x, y int) {
 func (s *Sprite) Draw(screen *ebiten.Image, dx, dy int, alpha float64) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(s.x+dx), float64(s.y+dy))
-	op.ColorM.Scale(1, 1, 1, alpha)
-	text.Draw(screen, s.name, s.Font, s.x, s.y, color.White)
+	if s.chosen {
+		op.ColorM.Scale(2, 2, 2, alpha)
+	} else {
+		op.ColorM.Scale(1, 1, 1, alpha)
+	}
+	text.Draw(screen, s.name, theGame.Font, s.x, s.y, color.White)
 	screen.DrawImage(s.image, op)
 	screen.DrawImage(s.image, op)
 
@@ -114,7 +123,7 @@ func (s *Sprite) Draw(screen *ebiten.Image, dx, dy int, alpha float64) {
 
 // Draw draws the sprite.
 func (s *Sprite) DrawStatistics(screen *ebiten.Image, x, y int, alpha float64) {
-	text.Draw(screen, fmt.Sprintf("%s Charge : %f", s.name, s.charge), s.Font, x, y, color.White)
+	text.Draw(screen, fmt.Sprintf("%s Charge : %f", s.name, s.charge), theGame.Font, x, y, color.White)
 }
 
 // StrokeSource represents a input device to provide strokes.
@@ -215,9 +224,12 @@ func (s *Stroke) SetDraggingObject(object interface{}) {
 type Game struct {
 	strokes map[*Stroke]struct{}
 	sprites []*Sprite
+	Font    font.Face
 }
 
 var theGame *Game
+
+var rectangle *ebiten.Image
 
 func init() {
 	// Decode image from a byte slice instead of a file so that
@@ -229,6 +241,9 @@ func init() {
 	//    This works even on browsers.
 	// 3) Use ebitenutil.NewImageFromFile to create an ebiten.Image directly from a file.
 	//    This also works on browsers.
+	rectangle, _ = ebiten.NewImage(screenWidth, screenHeight/10, ebiten.FilterNearest)
+	rectangle.Fill(color.White)
+
 	negimg, _, err := image.Decode(bytes.NewReader(sprites.Negative))
 	if err != nil {
 		log.Fatal(err)
@@ -251,8 +266,8 @@ func init() {
 		log.Fatal(err)
 	}
 	uiFont := &Font{Face: truetype.NewFace(tt, &truetype.Options{
-		Size:    24,
-		DPI:     72,
+		Size:    6,
+		DPI:     172,
 		Hinting: font.HintingFull,
 	})}
 	b, _, _ := uiFont.Face.GlyphBounds('M')
@@ -260,7 +275,7 @@ func init() {
 
 	sprites := []*Sprite{}
 	w, h := neutralImage.Size()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 2; i++ {
 		s := &Sprite{
 			name:   "Q" + strconv.Itoa(i),
 			image:  neutralImage,
@@ -268,7 +283,6 @@ func init() {
 			y:      rand.Intn(screenHeight - h),
 			charge: rand.Float32(),
 		}
-		s.Font = uiFont.Face
 		sprites = append(sprites, s)
 	}
 
@@ -276,6 +290,7 @@ func init() {
 	theGame = &Game{
 		strokes: map[*Stroke]struct{}{},
 		sprites: sprites,
+		Font:    uiFont.Face,
 	}
 }
 
@@ -289,6 +304,14 @@ func (g *Game) spriteAt(x, y int) *Sprite {
 		}
 	}
 	return nil
+}
+
+func drawHelp(screen *ebiten.Image) {
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(0, FullScreenHeight*.9+FullScreenHeight*.01)
+	screen.DrawImage(rectangle, opts)
+	text.Draw(screen, "LMB to select charge, drag to move, '9' to increase charge, ", theGame.Font, 0, FullScreenHeight-FullScreenHeight*.05, color.NRGBA{0xff, 0x00, 0x00, 0xff})
+	text.Draw(screen, "'0' to decrease charge, 'A' to add a new charge.", theGame.Font, 0, FullScreenHeight-FullScreenHeight*.01, color.NRGBA{0xff, 0x00, 0x00, 0xff})
 }
 
 func (g *Game) updateStroke(stroke *Stroke) {
@@ -320,6 +343,10 @@ func (g *Game) updateStroke(stroke *Stroke) {
 }
 
 func (g *Game) update(screen *ebiten.Image) error {
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		fmt.Println("Right Mouse")
+	}
+
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		s := NewStroke(&MouseStrokeSource{})
 		spriteAtPos := g.spriteAt(s.Position())
@@ -345,8 +372,59 @@ func (g *Game) update(screen *ebiten.Image) error {
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyE) {
-		fmt.Println("E")
+	if inpututil.IsKeyJustPressed(ebiten.KeyA) {
+		s := &Sprite{
+			name:   "Q" + strconv.Itoa(len(theGame.sprites)+1),
+			image:  neutralImage,
+			x:      rand.Intn(screenWidth),
+			y:      rand.Intn(screenHeight),
+			charge: 0.,
+		}
+		theGame.sprites = append(theGame.sprites, s)
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.Key0) {
+		for _, s := range g.sprites {
+			if s.chosen {
+				s.charge += 0.1
+			}
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key9) {
+		for _, s := range g.sprites {
+			if s.chosen {
+				s.charge -= 0.1
+			}
+		}
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyUp) {
+		for _, s := range g.sprites {
+			if s.chosen {
+				s.y -= screenHeight / 10
+			}
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
+		for _, s := range g.sprites {
+			if s.chosen {
+				s.y += screenHeight / 10
+			}
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyRight) {
+		for _, s := range g.sprites {
+			if s.chosen {
+				s.x += screenWidth / 10
+			}
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyLeft) {
+		for _, s := range g.sprites {
+			if s.chosen {
+				s.x -= screenWidth / 10
+			}
+		}
 	}
 
 	for s := range g.strokes {
@@ -360,6 +438,7 @@ func (g *Game) update(screen *ebiten.Image) error {
 		return nil
 	}
 
+	drawHelp(screen)
 	draggingSprites := map[*Sprite]struct{}{}
 	for s := range g.strokes {
 		if sprite := s.DraggingObject().(*Sprite); sprite != nil {
@@ -372,16 +451,17 @@ func (g *Game) update(screen *ebiten.Image) error {
 			continue
 		}
 		switch {
-		case s.charge < 0.:
-			s.image = positiveImage
 		case s.charge > 0.:
+			s.image = positiveImage
+		case s.charge < 0.:
 			s.image = negativeImage
 		default:
 			s.image = neutralImage
 		}
 		s.Draw(screen, 0, 0, 1)
+
 		if s.chosen {
-			s.DrawStatistics(screen, screenWidth/10, screenHeight/10, 1)
+			s.DrawStatistics(screen, screenWidth*.1, screenHeight*.1, 1)
 		}
 	}
 	for s := range g.strokes {
@@ -391,13 +471,13 @@ func (g *Game) update(screen *ebiten.Image) error {
 		}
 	}
 
-	ebitenutil.DebugPrint(screen, "Drag & Drop the carges!")
+	// ebitenutil.DebugPrint(screen, "Drag & Drop the carges!")
 
 	return nil
 }
 
 func main() {
-	if err := ebiten.Run(theGame.update, screenWidth, screenHeight, 2, "Drag & Drop (Ebiten Demo)"); err != nil {
+	if err := ebiten.Run(theGame.update, FullScreenWidth, FullScreenHeight, 2, "Drag & Drop (Ebiten Demo)"); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -1,4 +1,4 @@
-module github.com/auyer/animation
+module github.com/auyer/electrical-charges
 
 go 1.12
 

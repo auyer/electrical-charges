@@ -9,7 +9,6 @@ github.com/gopherjs/gopherjs/js
 github.com/gopherjs/gopherwasm/js
 # github.com/hajimehoshi/ebiten v1.9.3
 github.com/hajimehoshi/ebiten
-github.com/hajimehoshi/ebiten/ebitenutil
 github.com/hajimehoshi/ebiten/inpututil
 github.com/hajimehoshi/ebiten/text
 github.com/hajimehoshi/ebiten/internal/affine
@@ -23,7 +22,6 @@ github.com/hajimehoshi/ebiten/internal/png
 github.com/hajimehoshi/ebiten/internal/shareable
 github.com/hajimehoshi/ebiten/internal/ui
 github.com/hajimehoshi/ebiten/internal/web
-github.com/hajimehoshi/ebiten/ebitenutil/internal/assets
 github.com/hajimehoshi/ebiten/internal/graphicsdriver/metal
 github.com/hajimehoshi/ebiten/internal/graphicsdriver/metal/mtl
 github.com/hajimehoshi/ebiten/internal/graphicsdriver/opengl
