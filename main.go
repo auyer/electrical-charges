@@ -49,8 +49,8 @@ func init() {
 }
 
 const (
-	FullScreenWidth  = 500
-	FullScreenHeight = 400
+	FullScreenWidth  = 400
+	FullScreenHeight = 300
 	screenWidth      = FullScreenWidth
 	screenHeight     = FullScreenHeight * .9
 )
@@ -112,6 +112,7 @@ func (s *Sprite) Draw(screen *ebiten.Image, dx, dy int, alpha float64) {
 	op.GeoM.Translate(float64(s.x+dx), float64(s.y+dy))
 	if s.chosen {
 		op.ColorM.Scale(2, 2, 2, alpha)
+		// screen.DrawImage()
 	} else {
 		op.ColorM.Scale(1, 1, 1, alpha)
 	}
@@ -222,14 +223,15 @@ func (s *Stroke) SetDraggingObject(object interface{}) {
 }
 
 type Game struct {
-	strokes map[*Stroke]struct{}
-	sprites []*Sprite
-	Font    font.Face
+	strokes      map[*Stroke]struct{}
+	sprites      []*Sprite
+	Font         font.Face
+	ChosenSprite *Sprite
 }
 
 var theGame *Game
 
-var rectangle *ebiten.Image
+var rectangle, line *ebiten.Image
 
 func init() {
 	// Decode image from a byte slice instead of a file so that
@@ -243,6 +245,9 @@ func init() {
 	//    This also works on browsers.
 	rectangle, _ = ebiten.NewImage(screenWidth, screenHeight/10, ebiten.FilterNearest)
 	rectangle.Fill(color.White)
+
+	line, _ = ebiten.NewImage(5, 1, ebiten.FilterNearest)
+	line.Fill(color.NRGBA{0xff, 0x00, 0x00, 0xff})
 
 	negimg, _, err := image.Decode(bytes.NewReader(sprites.Negative))
 	if err != nil {
@@ -288,9 +293,10 @@ func init() {
 
 	// Initialize the game.
 	theGame = &Game{
-		strokes: map[*Stroke]struct{}{},
-		sprites: sprites,
-		Font:    uiFont.Face,
+		strokes:      map[*Stroke]struct{}{},
+		sprites:      sprites,
+		Font:         uiFont.Face,
+		ChosenSprite: nil,
 	}
 }
 
@@ -343,33 +349,32 @@ func (g *Game) updateStroke(stroke *Stroke) {
 }
 
 func (g *Game) update(screen *ebiten.Image) error {
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-		fmt.Println("Right Mouse")
-	}
 
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		s := NewStroke(&MouseStrokeSource{})
 		spriteAtPos := g.spriteAt(s.Position())
 		s.SetDraggingObject(spriteAtPos)
 		g.strokes[s] = struct{}{}
+		for _, s := range g.sprites {
+			s.chosen = false
+		}
 		if spriteAtPos != nil {
-			for _, s := range g.sprites {
-				s.chosen = false
-			}
 			spriteAtPos.chosen = true
 		}
+		g.ChosenSprite = spriteAtPos
 	}
 	for _, id := range inpututil.JustPressedTouchIDs() {
 		s := NewStroke(&TouchStrokeSource{id})
 		spriteAtPos := g.spriteAt(s.Position())
 		s.SetDraggingObject(spriteAtPos)
 		g.strokes[s] = struct{}{}
+		for _, s := range g.sprites {
+			s.chosen = false
+		}
 		if spriteAtPos != nil {
-			for _, s := range g.sprites {
-				s.chosen = false
-			}
 			spriteAtPos.chosen = true
 		}
+		g.ChosenSprite = spriteAtPos
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyA) {
@@ -462,6 +467,12 @@ func (g *Game) update(screen *ebiten.Image) error {
 
 		if s.chosen {
 			s.DrawStatistics(screen, screenWidth*.1, screenHeight*.1, 1)
+		}
+		if theGame.ChosenSprite != nil {
+			opt := &ebiten.DrawImageOptions{}
+			opt.GeoM.Translate(float64(s.x), float64(s.y))
+			// opt.GeoM.Rotate()
+			screen.DrawImage(line, opt)
 		}
 	}
 	for s := range g.strokes {
