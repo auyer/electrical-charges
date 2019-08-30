@@ -468,7 +468,7 @@ func (g *Game) update(screen *ebiten.Image) error {
 		if s.chosen {
 			s.DrawStatistics(screen, screenWidth*.1, screenHeight*.1, 1)
 		}
-		if theGame.ChosenSprite != nil {
+		if g.ChosenSprite != nil {
 			opt := &ebiten.DrawImageOptions{}
 			opt.GeoM.Translate(float64(s.x), float64(s.y))
 			// opt.GeoM.Rotate()
