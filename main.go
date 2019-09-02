@@ -1,19 +1,3 @@
-// Copyright 2018 The Ebiten Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// +build example jsgo
-
 package main
 
 import (
@@ -26,7 +10,6 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
-	"time"
 
 	"golang.org/x/image/font"
 
@@ -64,26 +47,37 @@ func angle(particle1 *Sprite, particle2 *Sprite) float64 {
 	return math.Atan2(float64(particle1.y-particle2.y), float64(particle1.x-particle2.x))
 }
 
+func midPoint(particle1, particle2 *Sprite) (int, int) {
+	return (particle1.x + particle2.x) / 2, (particle1.y + particle2.y) / 2
+}
+
+// drawElectricalInformation draws the electrical information generated between two charges
+func drawElectricalInformation(screen *ebiten.Image, sprite1, sprite2 *Sprite) {
+	opt := &ebiten.DrawImageOptions{}
+	opt.GeoM.Scale(1, distance(sprite1, sprite2)*100)
+	opt.GeoM.Rotate(angle(sprite1, sprite2) + math.Pi/2)
+	opt.GeoM.Translate(float64(sprite1.x)+20, float64(sprite1.y)+20)
+	screen.DrawImage(line, opt)
+	midx, midy := midPoint(sprite1, sprite2)
+	text.Draw(screen, fmt.Sprintf("%.2f m", distance(sprite1, sprite2)), theGame.Font, midx, midy, color.White)
+	text.Draw(screen, fmt.Sprintf("F %.2e N", force(sprite1, sprite2)), theGame.Font, sprite2.x, sprite2.y+fontHeight*4, color.White)
+	text.Draw(screen, fmt.Sprintf("E %.2e N/C", field(sprite1.charge, distance(sprite2, sprite1))), theGame.Font, sprite2.x, sprite2.y+fontHeight/10+fontHeight*5, color.White)
+}
+
 var (
 	negativeImage, neutralImage, positiveImage *ebiten.Image
+	rectangle, line                            *ebiten.Image
+	theGame                                    *Game
+	fontHeight                                 int
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 const (
 	k                = 0.000000009 // Nm²/C²
-	FullScreenWidth  = 400
-	FullScreenHeight = 300
-	screenWidth      = FullScreenWidth
-	screenHeight     = FullScreenHeight * .9
+	fullScreenWidth  = 800
+	fullScreenHeight = 600
+	screenWidth      = fullScreenWidth
+	screenHeight     = fullScreenHeight * .9
 )
-
-type Font struct {
-	Face        font.Face
-	FontMHeight int
-}
 
 // Sprite represents an image.
 type Sprite struct {
@@ -91,7 +85,7 @@ type Sprite struct {
 	image  *ebiten.Image
 	x      int
 	y      int
-	charge float32
+	charge float64
 	chosen bool
 }
 
@@ -129,22 +123,21 @@ func (s *Sprite) MoveBy(x, y int) {
 // Draw draws the sprite.
 func (s *Sprite) Draw(screen *ebiten.Image, dx, dy int, alpha float64) {
 	op := &ebiten.DrawImageOptions{}
+	// op.GeoM.Scale(0.5, 0.5)
 	op.GeoM.Translate(float64(s.x+dx), float64(s.y+dy))
 	if s.chosen {
-		op.ColorM.Scale(2, 2, 2, alpha)
-		// screen.DrawImage()
+		op.ColorM.Scale(0.5, 0.5, 0.5, alpha)
 	} else {
 		op.ColorM.Scale(1, 1, 1, alpha)
 	}
 	text.Draw(screen, s.name, theGame.Font, s.x, s.y, color.White)
 	screen.DrawImage(s.image, op)
-	screen.DrawImage(s.image, op)
 
 }
 
-// Draw draws the sprite.
+// DrawStatistics draws the sprites charge on the top of the screen.
 func (s *Sprite) DrawStatistics(screen *ebiten.Image, x, y int, alpha float64) {
-	text.Draw(screen, fmt.Sprintf("%s Charge : %f", s.name, s.charge), theGame.Font, x, y, color.White)
+	text.Draw(screen, fmt.Sprintf("%s Charge : %.2f C", s.name, s.charge), theGame.Font, x, y, color.White)
 }
 
 // StrokeSource represents a input device to provide strokes.
@@ -156,10 +149,12 @@ type StrokeSource interface {
 // MouseStrokeSource is a StrokeSource implementation of mouse.
 type MouseStrokeSource struct{}
 
+// Position returns the cursor position
 func (m *MouseStrokeSource) Position() (int, int) {
 	return ebiten.CursorPosition()
 }
 
+// IsJustReleased checks if the mouse button was released
 func (m *MouseStrokeSource) IsJustReleased() bool {
 	return inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
 }
@@ -169,10 +164,12 @@ type TouchStrokeSource struct {
 	ID int
 }
 
+// Position returns the touch screen position
 func (t *TouchStrokeSource) Position() (int, int) {
 	return ebiten.TouchPosition(t.ID)
 }
 
+// IsJustReleased checks if the touch command was released
 func (t *TouchStrokeSource) IsJustReleased() bool {
 	return inpututil.IsTouchJustReleased(t.ID)
 }
@@ -196,6 +193,7 @@ type Stroke struct {
 	draggingObject interface{}
 }
 
+// NewStroke creates a new stroke
 func NewStroke(source StrokeSource) *Stroke {
 	cx, cy := source.Position()
 	return &Stroke{
@@ -207,6 +205,7 @@ func NewStroke(source StrokeSource) *Stroke {
 	}
 }
 
+// Update function updates the stroke information for each game tick
 func (s *Stroke) Update() {
 	if s.released {
 		return
@@ -220,28 +219,34 @@ func (s *Stroke) Update() {
 	s.currentY = y
 }
 
+// IsReleased checks if the stroke was releases
 func (s *Stroke) IsReleased() bool {
 	return s.released
 }
 
+// Position returns the current stroke position
 func (s *Stroke) Position() (int, int) {
 	return s.currentX, s.currentY
 }
 
+// PositionDiff points the difference between the initial position and the current position
 func (s *Stroke) PositionDiff() (int, int) {
 	dx := s.currentX - s.initX
 	dy := s.currentY - s.initY
 	return dx, dy
 }
 
+// DraggingObject returns the object being dragged
 func (s *Stroke) DraggingObject() interface{} {
 	return s.draggingObject
 }
 
+// SetDraggingObject sets an object as being dragged
 func (s *Stroke) SetDraggingObject(object interface{}) {
 	s.draggingObject = object
 }
 
+// Game struct stores the game state, its sprites, strokes, Font and the selected sprite
 type Game struct {
 	strokes      map[*Stroke]struct{}
 	sprites      []*Sprite
@@ -249,55 +254,45 @@ type Game struct {
 	ChosenSprite *Sprite
 }
 
-var theGame *Game
-
-var rectangle, line *ebiten.Image
-
 func init() {
-	// Decode image from a byte slice instead of a file so that
-	// this example works in any working directory.
-	// If you want to use a file, there are some options:
-	// 1) Use os.Open and pass the file to the image decoder.
-	//    This is a very regular way, but doesn't work on browsers.
-	// 2) Use ebitenutil.OpenFile and pass the file to the image decoder.
-	//    This works even on browsers.
-	// 3) Use ebitenutil.NewImageFromFile to create an ebiten.Image directly from a file.
-	//    This also works on browsers.
+	rand.Seed(25) // Deterministic rand seed
+
+	// creating a white rectangle to be used in the bottom of the screen
 	rectangle, _ = ebiten.NewImage(screenWidth, screenHeight/10, ebiten.FilterNearest)
 	rectangle.Fill(color.White)
 
-	line, _ = ebiten.NewImage(5, 1, ebiten.FilterNearest)
-	line.Fill(color.NRGBA{0xff, 0x00, 0x00, 0xff})
+	// creating the line to link particles
+	line, _ = ebiten.NewImage(1, 1, ebiten.FilterNearest)
+	line.Fill(color.NRGBA{0x00, 0xff, 0x00, 0xff})
 
+	// negative sprite image
 	negimg, _, err := image.Decode(bytes.NewReader(sprites.Negative))
 	if err != nil {
 		log.Fatal(err)
 	}
+	negativeImage, _ = ebiten.NewImageFromImage(negimg, ebiten.FilterDefault)
+
+	// neutral sprite image
 	netimg, _, err := image.Decode(bytes.NewReader(sprites.Neutral))
 	if err != nil {
 		log.Fatal(err)
 	}
+	neutralImage, _ = ebiten.NewImageFromImage(netimg, ebiten.FilterDefault)
+
+	// positive sprite image
 	posimg, _, err := image.Decode(bytes.NewReader(sprites.Positive))
 	if err != nil {
 		log.Fatal(err)
 	}
-	negativeImage, _ = ebiten.NewImageFromImage(negimg, ebiten.FilterDefault)
-	neutralImage, _ = ebiten.NewImageFromImage(netimg, ebiten.FilterDefault)
 	positiveImage, _ = ebiten.NewImageFromImage(posimg, ebiten.FilterDefault)
 
-	// Initialize the sprites.
+	// creating the font
 	tt, err := truetype.Parse(goregular.TTF)
 	if err != nil {
 		log.Fatal(err)
 	}
-	uiFont := &Font{Face: truetype.NewFace(tt, &truetype.Options{
-		Size:    6,
-		DPI:     172,
-		Hinting: font.HintingFull,
-	})}
-	b, _, _ := uiFont.Face.GlyphBounds('M')
-	uiFont.FontMHeight = (b.Max.Y - b.Min.Y).Ceil()
 
+	// Initialize the sprites.
 	sprites := []*Sprite{}
 	w, h := neutralImage.Size()
 	for i := 0; i < 2; i++ {
@@ -306,20 +301,27 @@ func init() {
 			image:  neutralImage,
 			x:      rand.Intn(screenWidth - w),
 			y:      rand.Intn(screenHeight - h),
-			charge: rand.Float32(),
+			charge: 0,
 		}
 		sprites = append(sprites, s)
 	}
 
 	// Initialize the game.
 	theGame = &Game{
-		strokes:      map[*Stroke]struct{}{},
-		sprites:      sprites,
-		Font:         uiFont.Face,
+		strokes: map[*Stroke]struct{}{},
+		sprites: sprites,
+		Font: truetype.NewFace(tt, &truetype.Options{
+			Size:    12,
+			DPI:     142,
+			Hinting: font.HintingFull,
+		}),
 		ChosenSprite: nil,
 	}
+	b, _, _ := theGame.Font.GlyphBounds('M')
+	fontHeight = (b.Max.Y - b.Min.Y).Ceil()
 }
 
+// spriteAt function returns a sprite at the requested function or nil if none is found
 func (g *Game) spriteAt(x, y int) *Sprite {
 	// As the sprites are ordered from back to front,
 	// search the clicked/touched sprite in reverse order.
@@ -332,12 +334,14 @@ func (g *Game) spriteAt(x, y int) *Sprite {
 	return nil
 }
 
+// drawHelp draws the help text on the bottom of the screen
 func drawHelp(screen *ebiten.Image) {
+	textHeight := int(fullScreenHeight - fullScreenHeight*.05)
 	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(0, FullScreenHeight*.9+FullScreenHeight*.01)
+	opts.GeoM.Translate(0, fullScreenHeight*.9+fullScreenHeight*.01)
 	screen.DrawImage(rectangle, opts)
-	text.Draw(screen, "LMB to select charge, drag to move, '9' to increase charge, ", theGame.Font, 0, FullScreenHeight-FullScreenHeight*.05, color.NRGBA{0xff, 0x00, 0x00, 0xff})
-	text.Draw(screen, "'0' to decrease charge, 'A' to add a new charge.", theGame.Font, 0, FullScreenHeight-FullScreenHeight*.01, color.NRGBA{0xff, 0x00, 0x00, 0xff})
+	text.Draw(screen, "LMB to select charge, drag to move, 'A' to add a new charge, ", theGame.Font, 0, textHeight, color.NRGBA{0xff, 0x00, 0x00, 0xff})
+	text.Draw(screen, "'P' to increase charge, 'N' to decrease charge. ", theGame.Font, 0, textHeight+fontHeight+fontHeight/5, color.NRGBA{0xff, 0x00, 0x00, 0xff})
 }
 
 func (g *Game) updateStroke(stroke *Stroke) {
@@ -369,7 +373,6 @@ func (g *Game) updateStroke(stroke *Stroke) {
 }
 
 func (g *Game) update(screen *ebiten.Image) error {
-
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		s := NewStroke(&MouseStrokeSource{})
 		spriteAtPos := g.spriteAt(s.Position())
@@ -399,7 +402,7 @@ func (g *Game) update(screen *ebiten.Image) error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyA) {
 		s := &Sprite{
-			name:   "Q" + strconv.Itoa(len(theGame.sprites)+1),
+			name:   "Q" + strconv.Itoa(len(theGame.sprites)),
 			image:  neutralImage,
 			x:      rand.Intn(screenWidth),
 			y:      rand.Intn(screenHeight),
@@ -408,14 +411,14 @@ func (g *Game) update(screen *ebiten.Image) error {
 		theGame.sprites = append(theGame.sprites, s)
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.Key0) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
 		for _, s := range g.sprites {
 			if s.chosen {
 				s.charge += 0.1
 			}
 		}
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key9) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyN) {
 		for _, s := range g.sprites {
 			if s.chosen {
 				s.charge -= 0.1
@@ -488,11 +491,8 @@ func (g *Game) update(screen *ebiten.Image) error {
 		if s.chosen {
 			s.DrawStatistics(screen, screenWidth*.1, screenHeight*.1, 1)
 		}
-		if g.ChosenSprite != nil {
-			opt := &ebiten.DrawImageOptions{}
-			opt.GeoM.Translate(float64(s.x), float64(s.y))
-			// opt.GeoM.Rotate()
-			screen.DrawImage(line, opt)
+		if g.ChosenSprite != nil && g.ChosenSprite != s {
+			drawElectricalInformation(screen, g.ChosenSprite, s)
 		}
 	}
 	for s := range g.strokes {
@@ -501,14 +501,11 @@ func (g *Game) update(screen *ebiten.Image) error {
 			sprite.Draw(screen, dx, dy, 0.5)
 		}
 	}
-
-	// ebitenutil.DebugPrint(screen, "Drag & Drop the carges!")
-
 	return nil
 }
 
 func main() {
-	if err := ebiten.Run(theGame.update, FullScreenWidth, FullScreenHeight, 2, "Drag & Drop (Ebiten Demo)"); err != nil {
+	if err := ebiten.Run(theGame.update, fullScreenWidth, fullScreenHeight, 1, "Electrical Charges demonstration"); err != nil {
 		log.Fatal(err)
 	}
 }
