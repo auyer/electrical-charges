@@ -34,12 +34,12 @@ func distance(particle1, particle2 *Sprite) float64 {
 // force calculates the force between two charges
 func force(particle1 *Sprite, particle2 *Sprite) float64 {
 	d := distance(particle1, particle2)
-	return k * (particle1.charge * particle2.charge) / d * d
+	return k * (particle1.charge * particle2.charge) / (d * d)
 }
 
 // field calculates the eletric field on a given radius
 func field(charge float64, radius float64) float64 {
-	return k * charge / radius * radius
+	return k * charge/ (radius * radius)
 }
 
 // angle calculates the angle in rads by the arc tangent of the tangent formed by the two charges
@@ -60,8 +60,8 @@ func drawElectricalInformation(screen *ebiten.Image, sprite1, sprite2 *Sprite) {
 	screen.DrawImage(line, opt)
 	midx, midy := midPoint(sprite1, sprite2)
 	text.Draw(screen, fmt.Sprintf("%.2f m", distance(sprite1, sprite2)), theGame.Font, midx, midy, color.White)
-	text.Draw(screen, fmt.Sprintf("F %.2e N", force(sprite1, sprite2)), theGame.Font, sprite2.x, sprite2.y+fontHeight*4, color.White)
-	text.Draw(screen, fmt.Sprintf("E %.2e N/C", field(sprite1.charge, distance(sprite2, sprite1))), theGame.Font, sprite2.x, sprite2.y+fontHeight/10+fontHeight*5, color.White)
+	text.Draw(screen, fmt.Sprintf("F= %.2e N", force(sprite1, sprite2)), theGame.Font, sprite2.x, sprite2.y+fontHeight*4, color.White)
+	text.Draw(screen, fmt.Sprintf("E= %e N/C", field(sprite1.charge, distance(sprite1, sprite2))), theGame.Font, sprite2.x, sprite2.y+fontHeight/10+fontHeight*5, color.White)
 }
 
 var (
