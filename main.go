@@ -40,6 +40,30 @@ import (
 	"github.com/hajimehoshi/ebiten/inpututil"
 )
 
+// distance calculates the distance (Pythagorean Theorem) using the spacial coordinates of the charges
+func distance(particle1, particle2 *Sprite) float64 {
+	deltaX := float64(particle1.x - particle2.x)
+	deltaY := float64(particle1.y - particle2.y)
+	return math.Sqrt(deltaX*deltaX+deltaY*deltaY) / 100 // this division turns the distance scale to cm/px instead for m/px
+  }
+  
+  // force calculates the force between two charges
+  func force(particle1 *Sprite, particle2 *Sprite) float64 {
+	d := distance(particle1, particle2)
+	return k * (particle1.charge * particle2.charge) / d * d
+  }
+  
+  // field calculates the eletric field on a given radius
+  func field(charge float64, radius float64) float64 {
+	return k * charge / radius * radius
+  }
+  
+  // angle calculates the angle in rads by the arc tangent of the tangent formed by the two charges
+  func angle(particle1 *Sprite, particle2 *Sprite) float64 {
+	return math.Atan2(float64(particle1.y-particle2.y), float64(particle1.x-particle2.x))
+  }
+
+
 var (
 	negativeImage, neutralImage, positiveImage *ebiten.Image
 )
@@ -49,6 +73,7 @@ func init() {
 }
 
 const (
+	k                = 0.000000009 // Nm²/C²
 	FullScreenWidth  = 400
 	FullScreenHeight = 300
 	screenWidth      = FullScreenWidth
